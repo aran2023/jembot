@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JEMBOT BLE LED</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #f0f2f5; padding-top: 50px; }
+        .card { background: white; width: 300px; margin: 0 auto; padding: 20px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .btn { width: 80%; padding: 15px; font-size: 18px; margin: 10px; border: none; border-radius: 8px; cursor: pointer; transition: 0.2s; }
+        .connect { background: #28a745; color: white; }
+        .on { background: #ffc107; color: #333; font-weight: bold; }
+        .off { background: #6c757d; color: white; }
+        #status { margin-top: 15px; font-size: 14px; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>잼봇 LED 제어</h2>
+        <button class="btn connect" onclick="connectBLE()">1. 블루투스 연결</button>
+        <hr>
+        <button class="btn on" onclick="send('1')">LED 켜기 (ON)</button>
+        <button class="btn off" onclick="send('0')">LED 끄기 (OFF)</button>
+        <div id="status">상태: 연결 대기 중...</div>
+    </div>
+
+    <script>
+        let chara;
+        const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+        const CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+
+        async function connectBLE() {
+            try {
+                const device = await navigator.bluetooth.requestDevice({
+                    filters: [{ name: 'Jembot_S3_LED' }],
+                    optionalServices: [SERVICE_UUID]
+                });
+                const server = await device.gatt.connect();
+                const service = await server.getPrimaryService(SERVICE_UUID);
+                chara = await service.getCharacteristic(CHARACTERISTIC_UUID);
+                document.getElementById('status').innerText = "상태: 연결 성공! (Jembot)";
+            } catch (err) {
+                document.getElementById('status').innerText = "에러: " + err;
+            }
+        }
+
+        async function send(val) {
+            if (!chara) return alert("블루투스를 먼저 연결해주세요!");
+            await chara.writeValue(new TextEncoder().encode(val));
+        }
+    </script>
+</body>
+</html>
