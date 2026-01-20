@@ -2,51 +2,93 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JEMBOT BLE LED</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>JEMBOT CONTROLLER</title>
     <style>
-        body { font-family: sans-serif; text-align: center; background: #f0f2f5; padding-top: 50px; }
-        .card { background: white; width: 300px; margin: 0 auto; padding: 20px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .btn { width: 80%; padding: 15px; font-size: 18px; margin: 10px; border: none; border-radius: 8px; cursor: pointer; transition: 0.2s; }
-        .connect { background: #28a745; color: white; }
-        .on { background: #ffc107; color: #333; font-weight: bold; }
-        .off { background: #6c757d; color: white; }
-        #status { margin-top: 15px; font-size: 14px; color: #666; }
+        body { font-family: sans-serif; text-align: center; background: #f0f2f5; padding-top: 20px; touch-action: manipulation; }
+        .card { background: white; width: 90%; max-width: 350px; margin: 0 auto; padding: 20px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .btn { width: 100%; padding: 15px; font-size: 18px; margin: 5px 0; border: none; border-radius: 8px; cursor: pointer; transition: 0.2s; font-weight: bold; }
+        .connect { background: #28a745; color: white; margin-bottom: 20px; }
+        
+        /* 조종기 그리드 레이아웃 */
+        .grid-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
+        .control-btn { aspect-ratio: 1; font-size: 24px; background: #e9ecef; border: 1px solid #ced4da; border-radius: 10px; cursor: pointer; }
+        .control-btn:active { background: #adb5bd; transform: scale(0.95); }
+        .stop-btn { background: #dc3545; color: white; }
+
+        #status { margin-top: 15px; font-size: 14px; color: #666; word-break: break-all; }
     </style>
 </head>
 <body>
     <div class="card">
-        <h2>잼봇 LED 제어</h2>
-        <button class="btn connect" onclick="connectBLE()">1. 블루투스 연결</button>
-        <hr>
-        <button class="btn on" onclick="send('1')">LED 켜기 (ON)</button>
-        <button class="btn off" onclick="send('0')">LED 끄기 (OFF)</button>
+        <h2>젬봇(Jembot) 컨트롤러</h2>
+        <button class="btn connect" onclick="connectBLE()">📡 블루투스 연결하기</button>
         <div id="status">상태: 연결 대기 중...</div>
+        
+        <hr>
+        
+        <div class="grid-container">
+            <button class="control-btn" onclick="send('7')">↖</button>
+            <button class="control-btn" onclick="send('8')">▲<br>(전진)</button>
+            <button class="control-btn" onclick="send('9')">↗</button>
+            
+            <button class="control-btn" onclick="send('4')">◀<br>(좌)</button>
+            <button class="control-btn stop-btn" onclick="send('5')">STOP</button>
+            <button class="control-btn" onclick="send('6')">▶<br>(우)</button>
+            
+            <button class="control-btn" onclick="send('1')">↙</button>
+            <button class="control-btn" onclick="send('2')">▼<br>(후진)</button>
+            <button class="control-btn" onclick="send('3')">↘</button>
+        </div>
     </div>
 
     <script>
         let chara;
+        // 아란님의 ESP32 코드에 설정된 UUID와 동일해야 함
         const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
         const CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+        // 아란님의 ESP32 코드에 설정된 기기 이름
+        const DEVICE_NAME = "jembot0119"; 
 
         async function connectBLE() {
             try {
+                document.getElementById('status').innerText = "장치 검색 중...";
                 const device = await navigator.bluetooth.requestDevice({
-                    filters: [{ name: 'Jembot_S3_LED' }],
+                    filters: [{ name: DEVICE_NAME }], // jembot0119만 검색
                     optionalServices: [SERVICE_UUID]
                 });
+                
+                document.getElementById('status').innerText = "연결 시도 중...";
                 const server = await device.gatt.connect();
                 const service = await server.getPrimaryService(SERVICE_UUID);
                 chara = await service.getCharacteristic(CHARACTERISTIC_UUID);
-                document.getElementById('status').innerText = "상태: 연결 성공! (Jembot)";
+                
+                document.getElementById('status').innerText = "✅ 연결 성공! (" + device.name + ")";
+                
+                // 연결되면 시간 동기화 한 번 보내주기 (선택사항)
+                const now = new Date();
+                const timeStr = ("0" + now.getHours()).slice(-2) + ("0" + now.getMinutes()).slice(-2);
+                send(timeStr); 
+
             } catch (err) {
-                document.getElementById('status').innerText = "에러: " + err;
+                document.getElementById('status').innerText = "❌ 에러: " + err;
+                console.error(err);
             }
         }
 
         async function send(val) {
-            if (!chara) return alert("블루투스를 먼저 연결해주세요!");
-            await chara.writeValue(new TextEncoder().encode(val));
+            if (!chara) {
+                // 연결 안 되었을 때는 경고 대신 상태창 업데이트만 (UX 개선)
+                document.getElementById('status').innerText = "⚠️ 먼저 연결해주세요!";
+                return;
+            }
+            try {
+                // 텍스트를 바이트로 변환하여 전송
+                await chara.writeValue(new TextEncoder().encode(val));
+                console.log("Sent:", val);
+            } catch (e) {
+                document.getElementById('status').innerText = "전송 실패: " + e;
+            }
         }
     </script>
 </body>
