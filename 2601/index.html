@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>JemBot Controller (BLE)</title>
+    <link rel="manifest" href="manifest.json">
+    <style>
+        body { font-family: 'Arial', sans-serif; text-align: center; background-color: #f4f7f6; margin: 0; user-select: none; }
+        header { background: #28a745; color: white; padding: 15px; font-size: 1.2rem; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .status { margin: 10px; font-size: 0.9rem; color: #555; }
+        .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; max-width: 340px; margin: 20px auto; padding: 10px; }
+        .btn { 
+            aspect-ratio: 1; border: none; border-radius: 15px; font-size: 24px; font-weight: bold;
+            background: white; box-shadow: 0 4px 6px rgba(0,0,0,0.1); cursor: pointer; transition: all 0.1s;
+            display: flex; align-items: center; justify-content: center; color: #333;
+        }
+        .btn:active { background: #e2e6ea; transform: scale(0.95); box-shadow: 0 2px 3px rgba(0,0,0,0.1); }
+        .connect-btn { background: #007bff; color: white; padding: 10px 30px; border: none; border-radius: 25px; font-size: 1rem; margin: 10px; }
+        .stop { background-color: #ffc107; color: #000; }
+        #log { font-size: 0.8rem; color: #888; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <header>JemBot PWA Controller 🎮</header>
+    
+    <div class="status">
+        <button class="connect-btn" onclick="connectBLE()">📡 젬봇 연결하기</button>
+        <div id="connectionStatus">연결 끊김</div>
+    </div>
+
+    <div class="grid">
+        <button class="btn" onmousedown="sendCommand('7')" onmouseup="sendCommand('5')">↖</button>
+        <button class="btn" onmousedown="sendCommand('8')" onmouseup="sendCommand('5')">▲</button>
+        <button class="btn" onmousedown="sendCommand('9')" onmouseup="sendCommand('5')">↗</button>
+        
+        <button class="btn" onmousedown="sendCommand('4')" onmouseup="sendCommand('5')">◀</button>
+        <button class="btn stop" onclick="sendCommand('5')">STOP</button>
+        <button class="btn" onmousedown="sendCommand('6')" onmouseup="sendCommand('5')">▶</button>
+        
+        <button class="btn" onmousedown="sendCommand('1')" onmouseup="sendCommand('5')">↙</button>
+        <button class="btn" onmousedown="sendCommand('2')" onmouseup="sendCommand('5')">▼</button>
+        <button class="btn" onmousedown="sendCommand('3')" onmouseup="sendCommand('5')">↘</button>
+    </div>
+
+    <div id="log">준비 완료</div>
+
+    <script>
+        // PWA 등록
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js'));
+        }
+
+        // 블루투스 설정 (ESP32 코드와 일치해야 함)
+        const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+        const CHAR_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+        let device, characteristic;
+
+        async function connectBLE() {
+            try {
+                log("장치 검색 중...");
+                device = await navigator.bluetooth.requestDevice({
+                    filters: [{ name: 'jembot0119' }], // ESP32 이름과 똑같아야 함!
+                    optionalServices: [SERVICE_UUID]
+                });
+
+                const server = await device.gatt.connect();
+                const service = await server.getPrimaryService(SERVICE_UUID);
+                characteristic = await service.getCharacteristic(CHAR_UUID);
+
+                document.getElementById('connectionStatus').innerText = "🟢 연결됨 (" + device.name + ")";
+                document.querySelector('.connect-btn').style.display = 'none';
+                log("연결 성공!");
+                
+                // 연결되면 현재 시간 전송 (HHMM)
+                const now = new Date();
+                const timeStr = String(now.getHours()).padStart(2,'0') + String(now.getMinutes()).padStart(2,'0');
+                sendCommand(timeStr); 
+
+            } catch (error) {
+                log("연결 실패: " + error);
+            }
+        }
+
+        function sendCommand(cmd) {
+            if (!characteristic) return;
+            // 텍스트를 바이트로 변환하여 전송
+            const encoder = new TextEncoder();
+            characteristic.writeValue(encoder.encode(cmd))
+                .catch(err => log("전송 실패: " + err));
+        }
+
+        function log(msg) {
+            document.getElementById('log').innerText = msg;
+            console.log(msg);
+        }
+    </script>
+</body>
+</html>
